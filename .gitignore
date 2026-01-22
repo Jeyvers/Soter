@@ -80,3 +80,5 @@ reports/mutation/
 # Reports
 reports/*
 !reports/.gitkeep
+
+.trae/
