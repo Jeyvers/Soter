@@ -42,8 +42,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
       errorResponse = this.handleHttpException(exception, request, requestId);
     } else if (this.isPrismaError(exception)) {
       errorResponse = this.handlePrismaError(exception, request, requestId);
-    } else if (Array.isArray(exception) && exception.some((e) => e instanceof ValidationError)) {
-      errorResponse = this.handleValidationErrors(exception, request, requestId);
+    } else if (
+      Array.isArray(exception) &&
+      exception.some(e => e instanceof ValidationError)
+    ) {
+      errorResponse = this.handleValidationErrors(
+        exception,
+        request,
+        requestId,
+      );
     } else {
       errorResponse = this.handleGenericError(exception, request, requestId);
     }
@@ -51,7 +58,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(errorResponse.code as number).json(errorResponse);
   }
 
-  private handleHttpException(exception: HttpException, request: Request, requestId: string): ErrorResponse {
+  private handleHttpException(
+    exception: HttpException,
+    request: Request,
+    requestId: string,
+  ): ErrorResponse {
     const status = exception.getStatus();
     const message = exception.message || exception.getResponse();
 
@@ -66,37 +77,49 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private isPrismaError(exception: any): boolean {
-    return exception?.constructor?.name?.includes('Prisma') || 
-           exception?.clientVersion ||
-           exception?.meta?.target;
+    return (
+      exception?.constructor?.name?.includes('Prisma') ||
+      exception?.clientVersion ||
+      exception?.meta?.target
+    );
   }
 
-  private handlePrismaError(exception: any, request: Request, requestId: string): ErrorResponse {
+  private handlePrismaError(
+    exception: any,
+    request: Request,
+    requestId: string,
+  ): ErrorResponse {
     let code = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Database error occurred';
     let details: any = null;
 
     // Map common Prisma errors
-    if (exception.code === 'P2002') { // Unique constraint failed
+    if (exception.code === 'P2002') {
+      // Unique constraint failed
       code = HttpStatus.CONFLICT;
       message = 'Unique constraint violation';
       details = {
         target: exception.meta?.target,
-        field: Array.isArray(exception.meta?.target) ? exception.meta.target.join(', ') : exception.meta?.target,
+        field: Array.isArray(exception.meta?.target)
+          ? exception.meta.target.join(', ')
+          : exception.meta?.target,
       };
-    } else if (exception.code === 'P2025') { // Record not found
+    } else if (exception.code === 'P2025') {
+      // Record not found
       code = HttpStatus.NOT_FOUND;
       message = 'Record not found';
       details = {
         cause: exception.meta?.cause,
       };
-    } else if (exception.code === 'P2003') { // Foreign key constraint failed
+    } else if (exception.code === 'P2003') {
+      // Foreign key constraint failed
       code = HttpStatus.BAD_REQUEST;
       message = 'Foreign key constraint violation';
       details = {
         field_name: exception.meta?.field_name,
       };
-    } else if (exception.code === 'P2000') { // Value too long for column
+    } else if (exception.code === 'P2000') {
+      // Value too long for column
       code = HttpStatus.BAD_REQUEST;
       message = 'Value too long for column';
       details = {
@@ -124,11 +147,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     request: Request,
     requestId: string,
   ): ErrorResponse {
-    const validationErrors = exceptions.map((error) => ({
+    const validationErrors = exceptions.map(error => ({
       property: error.property,
       value: error.value,
       constraints: error.constraints,
-      children: error.children?.length ? this.formatChildren(error.children) : undefined,
+      children: error.children?.length
+        ? this.formatChildren(error.children)
+        : undefined,
     }));
 
     return {
@@ -144,23 +169,30 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private formatChildren(children: ValidationError[]): any[] {
-    return children.map((child) => ({
+    return children.map(child => ({
       property: child.property,
       value: child.value,
       constraints: child.constraints,
-      children: child.children?.length ? this.formatChildren(child.children) : undefined,
+      children: child.children?.length
+        ? this.formatChildren(child.children)
+        : undefined,
     }));
   }
 
-  private handleGenericError(exception: any, request: Request, requestId: string): ErrorResponse {
+  private handleGenericError(
+    exception: any,
+    request: Request,
+    requestId: string,
+  ): ErrorResponse {
     return {
       code: HttpStatus.INTERNAL_SERVER_ERROR,
       message: exception.message || 'Internal server error',
       details: {
         error_type: exception.constructor?.name,
-        ...(typeof process !== 'undefined' && process.env.NODE_ENV === 'development' && {
-          stack: exception.stack,
-        }),
+        ...(typeof process !== 'undefined' &&
+          process.env.NODE_ENV === 'development' && {
+            stack: exception.stack,
+          }),
       },
       requestId,
       timestamp: new Date().toISOString(),

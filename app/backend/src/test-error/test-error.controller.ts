@@ -30,7 +30,10 @@ export class TestErrorController {
   @Post('validation-error')
   @UsePipes(new ValidationPipe())
   postValidationError(@Body() body: CreateVerificationDto) {
-    return { message: 'This endpoint is for testing validation errors', data: body };
+    return {
+      message: 'This endpoint is for testing validation errors',
+      data: body,
+    };
   }
 
   @Get('prisma-error-simulation')
