@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -21,6 +22,8 @@ import {
 import { CampaignsModule } from './campaigns/campaigns.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { ClaimsModule } from './claims/claims.module';
+import { LoggingInterceptor } from './interceptors/logging.interceptor';
+import { LoggerService } from './logger/logger.service';
 
 @Module({
   imports: [
@@ -42,8 +45,8 @@ import { ClaimsModule } from './claims/claims.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
         connection: {
-          host: configService.get<string>('REDIS_HOST') || 'localhost',
-          port: parseInt(configService.get<string>('REDIS_PORT') || '6379'),
+          host: configService.get<string>('REDIS_HOST') ?? 'localhost',
+          port: parseInt(configService.get<string>('REDIS_PORT') ?? '6379', 10),
         },
       }),
       inject: [ConfigService],
@@ -63,16 +66,34 @@ import { ClaimsModule } from './claims/claims.module';
   ],
 
   controllers: [AppController],
-  providers: [AppService],
+
+  providers: [
+    AppService,
+
+    // Global structured logging interceptor
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+  ],
 })
 export class AppModule implements NestModule {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly loggerService: LoggerService,
+  ) {}
 
-  configure(consumer: MiddlewareConsumer) {
+  configure(consumer: MiddlewareConsumer): void {
     // Request correlation middleware
     consumer.apply(RequestCorrelationMiddleware).forRoutes('*');
 
-    // Rate limiter middleware (ES import version - ESLint safe)
+    // Rate limiter middleware
     consumer.apply(createRateLimiter(this.configService)).forRoutes('*');
+
+    // Startup log
+    this.loggerService.log(
+      'AppModule initialized with structured logging, correlation IDs, and rate limiting',
+      'AppModule',
+    );
   }
 }
